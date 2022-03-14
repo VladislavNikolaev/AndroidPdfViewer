@@ -37,8 +37,8 @@ android {
 }
 
 dependencies {
+    implementation project(':pdfium-android')
     implementation 'androidx.core:core:1.3.1'
-    implementation 'com.github.rhysmcknz:PdfiumAndroid:1.9.1'
 }
 
 apply from: 'bintray.gradle'
