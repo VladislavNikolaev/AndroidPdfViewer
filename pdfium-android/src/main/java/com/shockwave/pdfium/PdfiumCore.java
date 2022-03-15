@@ -43,6 +43,30 @@ public class PdfiumCore {
 
     private native long nativeLoadPage(long docPtr, int pageIndex);
 
+    private native long nativeLoadTextPage(long pagePtr);
+
+    public native String nativeGetText(long textPtr);
+
+    public native int nativeFindTextPage(long pagePtr, String key, int flag);
+
+    private native void nativeClosePageAndText(long pagePtr, long textPtr);
+
+    public native long nativeFindTextPageStart(long textPtr, long keyStr, int flag, int startIdx);
+    public native boolean nativeFindTextPageNext(long searchPtr);
+    public native void nativeFindTextPageEnd(long searchPtr);
+    public native int nativeGetFindIdx(long searchPtr);
+    public native int nativeGetFindLength(long searchPtr);
+
+    public static native long nativeGetStringChars(String key);
+    public static native void nativeReleaseStringChars(String key, long keyStr);
+
+    public native int nativeCountRects(long textPtr, int st, int ed);
+    public native boolean nativeGetRect(long pagePtr, int offsetY, int offsetX, int width, int height, long textPtr, RectF rect, int idx);
+
+    public native int nativeGetCharIndexAtCoord(long pagePtr, double width, double height, long textPtr, double posX, double posY, double tolX, double tolY);
+
+    public native int nativeGetMixedLooseCharPos(long pagePtr, int offsetY, int offsetX, int width, int height, RectF pt, long tid, int index, boolean loose);
+
     private native long[] nativeLoadPages(long docPtr, int fromIndex, int toIndex);
 
     private native void nativeClosePage(long pagePtr);
@@ -156,6 +180,18 @@ public class PdfiumCore {
     public int getPageCount(PdfDocument doc) {
         synchronized (lock) {
             return nativeGetPageCount(doc.mNativeDocPtr);
+        }
+    }
+
+    public long openText(long pagePtr) {
+        synchronized (lock) {
+            return nativeLoadTextPage(pagePtr);
+        }
+    }
+
+    public void closePageAndText(long pagePtr, long textPtr) {
+        synchronized (lock) {
+            nativeClosePageAndText(pagePtr, textPtr);
         }
     }
 

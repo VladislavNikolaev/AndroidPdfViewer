@@ -28,6 +28,26 @@ extern "C" {
 //
 DLLEXPORT FPDF_TEXTPAGE STDCALL FPDFText_LoadPage(FPDF_PAGE page);
 
+// Experimental API.
+// Function: FPDFText_GetLooseCharBox
+//          Get a "loose" bounding box of a particular character, i.e., covering
+//          the entire glyph bounds, without taking the actual glyph shape into
+//          account.
+// Parameters:
+//          text_page   -   Handle to a text page information structure.
+//                          Returned by FPDFText_LoadPage function.
+//          index       -   Zero-based index of the character.
+//          rect        -   Pointer to a FS_RECTF receiving the character box.
+// Return Value:
+//          On success, return TRUE and fill in |rect|. If |text_page| is
+//          invalid, or if |index| is out of bounds, then return FALSE, and the
+//          |rect| out parameter remains unmodified.
+// Comments:
+//          All positions are measured in PDF "user space".
+//
+DLLEXPORT FPDF_BOOL STDCALL
+FPDFText_GetLooseCharBox(FPDF_TEXTPAGE text_page, int index, FS_RECTF* rect);
+
 // Function: FPDFText_ClosePage
 //          Release all resources allocated for a text page information
 //          structure.
@@ -90,27 +110,29 @@ DLLEXPORT double STDCALL FPDFText_GetFontSize(FPDF_TEXTPAGE text_page,
 //          Get bounding box of a particular character.
 // Parameters:
 //          text_page   -   Handle to a text page information structure.
-//          Returned by FPDFText_LoadPage function.
+//                          Returned by FPDFText_LoadPage function.
 //          index       -   Zero-based index of the character.
 //          left        -   Pointer to a double number receiving left position
-//          of the character box.
+//                          of the character box.
 //          right       -   Pointer to a double number receiving right position
-//          of the character box.
+//                          of the character box.
 //          bottom      -   Pointer to a double number receiving bottom position
-//          of the character box.
+//                          of the character box.
 //          top         -   Pointer to a double number receiving top position of
-//          the character box.
+//                          the character box.
 // Return Value:
-//          None.
+//          On success, return TRUE and fill in |left|, |right|, |bottom|, and
+//          |top|. If |text_page| is invalid, or if |index| is out of bounds,
+//          then return FALSE, and the out parameters remain unmodified.
 // Comments:
 //          All positions are measured in PDF "user space".
 //
-DLLEXPORT void STDCALL FPDFText_GetCharBox(FPDF_TEXTPAGE text_page,
-                                           int index,
-                                           double* left,
-                                           double* right,
-                                           double* bottom,
-                                           double* top);
+DLLEXPORT FPDF_BOOL STDCALL FPDFText_GetCharBox(FPDF_TEXTPAGE text_page,
+                                                        int index,
+                                                        double* left,
+                                                        double* right,
+                                                        double* bottom,
+                                                        double* top);
 
 // Function: FPDFText_GetCharIndexAtPos
 //          Get the index of a character at or nearby a certain position on the
@@ -185,25 +207,29 @@ DLLEXPORT int STDCALL FPDFText_CountRects(FPDF_TEXTPAGE text_page,
 //          FPDFText_CountRects.
 // Parameters:
 //          text_page   -   Handle to a text page information structure.
-//          Returned by FPDFText_LoadPage function.
+//                          Returned by FPDFText_LoadPage function.
 //          rect_index  -   Zero-based index for the rectangle.
 //          left        -   Pointer to a double value receiving the rectangle
-//          left boundary.
+//                          left boundary.
 //          top         -   Pointer to a double value receiving the rectangle
-//          top boundary.
+//                          top boundary.
 //          right       -   Pointer to a double value receiving the rectangle
-//          right boundary.
+//                          right boundary.
 //          bottom      -   Pointer to a double value receiving the rectangle
-//          bottom boundary.
+//                          bottom boundary.
 // Return Value:
-//          None.
+//          On success, return TRUE and fill in |left|, |top|, |right|, and
+//          |bottom|. If |text_page| is invalid then return FALSE, and the out
+//          parameters remain unmodified. If |text_page| is valid but
+//          |rect_index| is out of bounds, then return FALSE and set the out
+//          parameters to 0.
 //
-DLLEXPORT void STDCALL FPDFText_GetRect(FPDF_TEXTPAGE text_page,
-                                        int rect_index,
-                                        double* left,
-                                        double* top,
-                                        double* right,
-                                        double* bottom);
+DLLEXPORT FPDF_BOOL STDCALL FPDFText_GetRect(FPDF_TEXTPAGE text_page,
+                                                     int rect_index,
+                                                     double* left,
+                                                     double* top,
+                                                     double* right,
+                                                     double* bottom);
 
 // Function: FPDFText_GetBoundedText
 //          Extract unicode text within a rectangular boundary on the page.

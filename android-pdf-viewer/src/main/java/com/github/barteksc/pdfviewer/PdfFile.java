@@ -35,33 +35,60 @@ class PdfFile {
 
     private static final Object lock = new Object();
     private PdfDocument pdfDocument;
-    private PdfiumCore pdfiumCore;
+    private final PdfiumCore pdfiumCore;
     private int pagesCount = 0;
-    /** Original page sizes */
-    private List<Size> originalPageSizes = new ArrayList<>();
-    /** Scaled page sizes */
-    private List<SizeF> pageSizes = new ArrayList<>();
-    /** Opened pages with indicator whether opening was successful */
-    private SparseBooleanArray openedPages = new SparseBooleanArray();
-    /** Page with maximum width */
+    private static final int GAP = 15;
+
+    /**
+     * Scaled page sizes
+     */
+    private final List<SizeF> pageSizes = new ArrayList<>();
+    /**
+     * Opened pages with indicator whether opening was successful
+     */
+    private final SparseBooleanArray openedPages = new SparseBooleanArray();
+    /**
+     * Page with maximum width
+     */
     private Size originalMaxWidthPageSize = new Size(0, 0);
-    /** Page with maximum height */
+    /**
+     * Page with maximum height
+     */
     private Size originalMaxHeightPageSize = new Size(0, 0);
-    /** Scaled page with maximum height */
+    /**
+     * Scaled page with maximum height
+     */
     private SizeF maxHeightPageSize = new SizeF(0, 0);
-    /** Scaled page with maximum width */
+    /**
+     * Scaled page with maximum width
+     */
     private SizeF maxWidthPageSize = new SizeF(0, 0);
-    /** True if scrolling is vertical, else it's horizontal */
-    private boolean isVertical;
-    /** Fixed spacing between pages in pixels */
-    private int spacingPx;
-    /** Calculate spacing automatically so each page fits on it's own in the center of the view */
-    private boolean autoSpacing;
-    /** Calculated offsets for pages */
-    private List<Float> pageOffsets = new ArrayList<>();
-    /** Calculated auto spacing for pages */
-    private List<Float> pageSpacing = new ArrayList<>();
-    /** Calculated document length (width or height, depending on swipe mode) */
+    /**
+     * True if scrolling is vertical, else it's horizontal
+     */
+    private final boolean isVertical;
+    /**
+     * Fixed spacing between pages in pixels
+     */
+    private final int spacingPx;
+    /**
+     * Calculate spacing automatically so each page fits on it's own in the center of the view
+     */
+    private final boolean autoSpacing;
+    /**
+     * Calculated offsets for pages
+     */
+    private final List<Float> pageOffsets = new ArrayList<>();
+    /**
+     * Calculated auto spacing for pages
+     */
+    private final List<Float> pageSpacing = new ArrayList<>();
+
+    public PdfPage[] pages;
+
+    /**
+     * Calculated document length (width or height, depending on swipe mode)
+     */
     private float documentLength = 0;
     private final FitPolicy pageFitPolicy;
     /**
@@ -74,6 +101,8 @@ class PdfFile {
      * (ex: 0, 2, 2, 8, 8, 1, 1, 1)
      */
     private int[] originalUserPages;
+
+    private long lengthAlongScrollAxis;
 
     PdfFile(PdfiumCore pdfiumCore, PdfDocument pdfDocument, FitPolicy pageFitPolicy, Size viewSize, int[] originalUserPages,
             boolean isVertical, int spacing, boolean autoSpacing, boolean fitEachPage) {
@@ -95,15 +124,21 @@ class PdfFile {
             pagesCount = pdfiumCore.getPageCount(pdfDocument);
         }
 
+        pages = new PdfPage[pagesCount];
         for (int i = 0; i < pagesCount; i++) {
-            Size pageSize = pdfiumCore.getPageSize(pdfDocument, documentPage(i));
+            int pageIndex = documentPage(i);
+            Size pageSize = pdfiumCore.getPageSize(pdfDocument, pageIndex);
             if (pageSize.getWidth() > originalMaxWidthPageSize.getWidth()) {
                 originalMaxWidthPageSize = pageSize;
             }
             if (pageSize.getHeight() > originalMaxHeightPageSize.getHeight()) {
                 originalMaxHeightPageSize = pageSize;
             }
-            originalPageSizes.add(pageSize);
+
+            PdfPage page = new PdfPage(pdfiumCore, pdfDocument, pageIndex, pageSize, isVertical, lengthAlongScrollAxis);
+            page.prepareText();
+            pages[i] = page;
+            lengthAlongScrollAxis += (isVertical ? pageSize.getHeight() : pageSize.getWidth()) + GAP;
         }
 
         recalculatePageSizes(viewSize);
@@ -121,8 +156,8 @@ class PdfFile {
         maxWidthPageSize = calculator.getOptimalMaxWidthPageSize();
         maxHeightPageSize = calculator.getOptimalMaxHeightPageSize();
 
-        for (Size size : originalPageSizes) {
-            pageSizes.add(calculator.calculate(size));
+        for (PdfPage page : pages) {
+            pageSizes.add(calculator.calculate(page.getSize()));
         }
         if (autoSpacing) {
             prepareAutoSpacing(viewSize);
@@ -231,7 +266,9 @@ class PdfFile {
         return spacing * zoom;
     }
 
-    /** Get primary page offset, that is Y for vertical scroll and X for horizontal scroll */
+    /**
+     * Get primary page offset, that is Y for vertical scroll and X for horizontal scroll
+     */
     public float getPageOffset(int pageIndex, float zoom) {
         int docPage = documentPage(pageIndex);
         if (docPage < 0) {
@@ -240,7 +277,9 @@ class PdfFile {
         return pageOffsets.get(pageIndex) * zoom;
     }
 
-    /** Get secondary page offset, that is X for vertical scroll and Y for horizontal scroll */
+    /**
+     * Get secondary page offset, that is X for vertical scroll and Y for horizontal scroll
+     */
     public float getSecondaryPageOffset(int pageIndex, float zoom) {
         SizeF pageSize = getPageSize(pageIndex);
         if (isVertical) {
@@ -283,6 +322,32 @@ class PdfFile {
             }
             return false;
         }
+    }
+
+    public SearchRecord findPageCached(String key, int pageIdx, int flag) {
+        PdfPage page = pages[pageIdx];
+        synchronized (page.getPid()) {
+            boolean shouldClose = page.loadText();
+            int foundIdx = pdfiumCore.nativeFindTextPage(page.getTid(), key, flag);
+            SearchRecord ret = foundIdx == -1 ? null : new SearchRecord(key, pageIdx, foundIdx);
+            if (shouldClose) {
+                page.close();
+            }
+            return ret;
+        }
+    }
+
+    public List<SearchRecordItem> findAllMatches(String key) {
+        ArrayList<SearchRecordItem> searchResults = new ArrayList<>();
+        for (PdfPage page : pages) {
+            SearchRecord searchRecord = findPageCached(key + "\0", page.getPageIdx(), 0);
+            if (searchRecord != null) {
+                page.getAllMatchOnPage(searchRecord);
+                searchResults.addAll(searchRecord.getSearchRecordItems());
+            }
+        }
+
+        return searchResults;
     }
 
     public boolean pageHasError(int pageIndex) {

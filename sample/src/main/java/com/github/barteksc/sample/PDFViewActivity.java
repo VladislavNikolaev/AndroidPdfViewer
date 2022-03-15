@@ -23,12 +23,16 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.provider.OpenableColumns;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+
 import com.github.barteksc.pdfviewer.PDFView;
 import com.github.barteksc.pdfviewer.listener.OnLoadCompleteListener;
 import com.github.barteksc.pdfviewer.listener.OnPageChangeListener;
@@ -57,11 +61,18 @@ public class PDFViewActivity extends AppCompatActivity implements OnPageChangeLi
     private final static int REQUEST_CODE = 42;
     public static final int PERMISSION_CODE = 42042;
 
-    public static final String SAMPLE_FILE = "sample.pdf";
+//    public static final String SAMPLE_FILE = "sample.pdf";
+    public static final String SAMPLE_FILE = "pdf-sample.pdf";
     public static final String READ_EXTERNAL_STORAGE = "android.permission.READ_EXTERNAL_STORAGE";
 
     @ViewById
     PDFView pdfView;
+
+    @ViewById
+    EditText etSearch;
+
+    @ViewById
+    Button searchButton;
 
     @NonConfigurationInstance
     Uri uri;
@@ -109,6 +120,13 @@ public class PDFViewActivity extends AppCompatActivity implements OnPageChangeLi
             displayFromAsset(SAMPLE_FILE);
         }
         setTitle(pdfFileName);
+
+        searchButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                pdfView.searchText(etSearch.getText().toString());
+            }
+        });
     }
 
     private void displayFromAsset(String assetFileName) {
