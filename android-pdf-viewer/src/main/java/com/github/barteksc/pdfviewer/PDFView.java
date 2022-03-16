@@ -37,6 +37,10 @@ import android.util.Log;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
+import com.ahmer.afzal.pdfium.PdfDocument;
+import com.ahmer.afzal.pdfium.PdfiumCore;
+import com.ahmer.afzal.pdfium.util.Size;
+import com.ahmer.afzal.pdfium.util.SizeF;
 import com.github.barteksc.pdfviewer.exception.PageRenderingException;
 import com.github.barteksc.pdfviewer.link.DefaultLinkHandler;
 import com.github.barteksc.pdfviewer.link.LinkHandler;
@@ -63,10 +67,6 @@ import com.github.barteksc.pdfviewer.util.FitPolicy;
 import com.github.barteksc.pdfviewer.util.MathUtils;
 import com.github.barteksc.pdfviewer.util.SnapEdge;
 import com.github.barteksc.pdfviewer.util.Util;
-import com.shockwave.pdfium.PdfDocument;
-import com.shockwave.pdfium.PdfiumCore;
-import com.shockwave.pdfium.util.Size;
-import com.shockwave.pdfium.util.SizeF;
 
 import java.io.File;
 import java.io.InputStream;

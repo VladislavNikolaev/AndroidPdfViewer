@@ -20,13 +20,13 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.util.SparseBooleanArray;
 
+import com.ahmer.afzal.pdfium.PdfDocument;
+import com.ahmer.afzal.pdfium.PdfiumCore;
+import com.ahmer.afzal.pdfium.util.Size;
+import com.ahmer.afzal.pdfium.util.SizeF;
 import com.github.barteksc.pdfviewer.exception.PageRenderingException;
 import com.github.barteksc.pdfviewer.util.FitPolicy;
 import com.github.barteksc.pdfviewer.util.PageSizeCalculator;
-import com.shockwave.pdfium.PdfDocument;
-import com.shockwave.pdfium.PdfiumCore;
-import com.shockwave.pdfium.util.Size;
-import com.shockwave.pdfium.util.SizeF;
 
 import java.util.ArrayList;
 import java.util.List;

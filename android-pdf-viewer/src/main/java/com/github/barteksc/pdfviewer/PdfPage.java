@@ -2,9 +2,9 @@ package com.github.barteksc.pdfviewer;
 
 import android.graphics.RectF;
 
-import com.shockwave.pdfium.PdfDocument;
-import com.shockwave.pdfium.PdfiumCore;
-import com.shockwave.pdfium.util.Size;
+import com.ahmer.afzal.pdfium.PdfDocument;
+import com.ahmer.afzal.pdfium.PdfiumCore;
+import com.ahmer.afzal.pdfium.util.Size;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,7 +22,7 @@ public class PdfPage {
     private String allText;
     private BreakIteratorHelper pageBreakIterator;
     private final long offsetAlongScrollAxis;
-    private boolean isVertical;
+    private final boolean isVertical;
 
     public PdfPage(PdfiumCore pdfiumCore, PdfDocument pdfDocument,
                    int pageIdx, Size size, boolean isVertical, long offsetAlongScrollAxis) {
@@ -82,7 +82,7 @@ public class PdfPage {
     public void close() {
         if (pid.get() != 0) {
             synchronized (pid) {
-                pdfiumCore.closePageAndText(pid.get(), tid);
+                pdfiumCore.closePage(pdfDocument, pageIdx);
                 pid.set(0);
                 tid = 0;
             }

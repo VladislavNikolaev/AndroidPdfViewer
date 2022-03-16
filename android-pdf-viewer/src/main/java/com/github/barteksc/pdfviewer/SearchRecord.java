@@ -1,6 +1,6 @@
 package com.github.barteksc.pdfviewer;
 
-import com.shockwave.pdfium.PdfiumCore;
+import com.ahmer.afzal.pdfium.PdfiumCore;
 
 import java.util.ArrayList;
 

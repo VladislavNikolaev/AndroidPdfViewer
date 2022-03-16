@@ -15,18 +15,18 @@
  */
 package com.github.barteksc.pdfviewer;
 
+import static com.github.barteksc.pdfviewer.util.Constants.Cache.CACHE_SIZE;
+import static com.github.barteksc.pdfviewer.util.Constants.PRELOAD_OFFSET;
+
 import android.graphics.RectF;
 
+import com.ahmer.afzal.pdfium.util.SizeF;
 import com.github.barteksc.pdfviewer.util.Constants;
 import com.github.barteksc.pdfviewer.util.MathUtils;
 import com.github.barteksc.pdfviewer.util.Util;
-import com.shockwave.pdfium.util.SizeF;
 
 import java.util.LinkedList;
 import java.util.List;
-
-import static com.github.barteksc.pdfviewer.util.Constants.Cache.CACHE_SIZE;
-import static com.github.barteksc.pdfviewer.util.Constants.PRELOAD_OFFSET;
 
 class PagesLoader {
 
