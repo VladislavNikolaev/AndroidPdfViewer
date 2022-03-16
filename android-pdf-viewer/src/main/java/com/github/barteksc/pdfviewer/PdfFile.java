@@ -18,6 +18,7 @@ package com.github.barteksc.pdfviewer;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.util.SparseArray;
 import android.util.SparseBooleanArray;
 
 import com.ahmer.afzal.pdfium.PdfDocument;
@@ -157,7 +158,9 @@ class PdfFile {
         maxHeightPageSize = calculator.getOptimalMaxHeightPageSize();
 
         for (PdfPage page : pages) {
-            pageSizes.add(calculator.calculate(page.getSize()));
+            SizeF currentSize = calculator.calculate(page.getOriginalSize());
+            page.setCurrentSize(currentSize);
+            pageSizes.add(currentSize);
         }
         if (autoSpacing) {
             prepareAutoSpacing(viewSize);
@@ -329,21 +332,21 @@ class PdfFile {
         synchronized (page.getPid()) {
             boolean shouldClose = page.loadText();
             int foundIdx = pdfiumCore.nativeFindTextPage(page.getTid(), key, flag);
-            SearchRecord ret = foundIdx == -1 ? null : new SearchRecord(key, pageIdx, foundIdx);
+            SearchRecord searchRecord = foundIdx == -1 ? null : new SearchRecord(key, pageIdx, foundIdx);
             if (shouldClose) {
                 page.close();
             }
-            return ret;
+            return searchRecord;
         }
     }
 
-    public List<SearchRecordItem> findAllMatches(String key) {
-        ArrayList<SearchRecordItem> searchResults = new ArrayList<>();
+    public SparseArray<SearchRecord> findAllMatches(String key) {
+        SparseArray<SearchRecord> searchResults = new SparseArray<>();
         for (PdfPage page : pages) {
             SearchRecord searchRecord = findPageCached(key + "\0", page.getPageIdx(), 0);
             if (searchRecord != null) {
                 page.getAllMatchOnPage(searchRecord);
-                searchResults.addAll(searchRecord.getSearchRecordItems());
+                searchResults.put(page.getPageIdx(), searchRecord);
             }
         }
 

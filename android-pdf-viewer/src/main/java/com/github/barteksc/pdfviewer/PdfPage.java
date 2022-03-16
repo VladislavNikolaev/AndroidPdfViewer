@@ -5,6 +5,7 @@ import android.graphics.RectF;
 import com.ahmer.afzal.pdfium.PdfDocument;
 import com.ahmer.afzal.pdfium.PdfiumCore;
 import com.ahmer.afzal.pdfium.util.Size;
+import com.ahmer.afzal.pdfium.util.SizeF;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -18,20 +19,25 @@ public class PdfPage {
     private final PdfDocument pdfDocument;
     private final int pageIdx;
     private final AtomicLong pid = new AtomicLong();
-    private final Size size;
+    private final Size originalSize;
+    private SizeF currentSize;
     private String allText;
     private BreakIteratorHelper pageBreakIterator;
     private final long offsetAlongScrollAxis;
     private final boolean isVertical;
 
     public PdfPage(PdfiumCore pdfiumCore, PdfDocument pdfDocument,
-                   int pageIdx, Size size, boolean isVertical, long offsetAlongScrollAxis) {
+                   int pageIdx, Size originalSize, boolean isVertical, long offsetAlongScrollAxis) {
         this.pdfiumCore = pdfiumCore;
         this.pdfDocument = pdfDocument;
         this.pageIdx = pageIdx;
-        this.size = size;
+        this.originalSize = originalSize;
         this.isVertical = isVertical;
         this.offsetAlongScrollAxis = offsetAlongScrollAxis;
+    }
+
+    public void setCurrentSize(SizeF currentSize) {
+        this.currentSize = currentSize;
     }
 
     public int getPageIdx() {
@@ -89,8 +95,8 @@ public class PdfPage {
         }
     }
 
-    public Size getSize() {
-        return size;
+    public Size getOriginalSize() {
+        return originalSize;
     }
 
     public void getAllMatchOnPage(SearchRecord record) {
@@ -121,10 +127,11 @@ public class PdfPage {
                     int offsetY = isVertical ? (int) offsetAlongScrollAxis : getLateralOffset();
                     int offsetX = isVertical ? getLateralOffset() : (int) offsetAlongScrollAxis;
                     pdfiumCore.nativeGetRect(
-                            pid.get(), offsetY, offsetX, size.getWidth(), size.getHeight(), tid, rect, i);
+                            pid.get(), 0, 0, (int) currentSize.getWidth(),
+                            (int) currentSize.getHeight(), tid, rect, i);
                     rects[i] = rect;
                 }
-                rects = mergeLineRects(Arrays.asList(rects), null).toArray(new RectF[0]);
+                rects = Arrays.asList(rects).toArray(new RectF[0]);
                 data.add(new SearchRecordItem(start, end, rects));
             }
         }
@@ -182,7 +189,7 @@ public class PdfPage {
         prepareText();
         if (tid != 0) {
             return pdfiumCore.nativeGetCharIndexAtCoord(
-                    pid.get(), size.getWidth(), size.getHeight(), tid,
+                    pid.get(), originalSize.getWidth(), originalSize.getHeight(), tid,
                     posX, posY, 100.0, 100.0);
         }
         return -1;
@@ -192,6 +199,6 @@ public class PdfPage {
         int offsetY = isVertical ? (int) offsetAlongScrollAxis : getLateralOffset();
         int offsetX = isVertical ? getLateralOffset() : (int) offsetAlongScrollAxis;
         pdfiumCore.nativeGetMixedLooseCharPos(pid.get(), offsetY, offsetX,
-                size.getWidth(), size.getHeight(), pos, tid, index, true);
+                originalSize.getWidth(), originalSize.getHeight(), pos, tid, index, true);
     }
 }

@@ -6,18 +6,18 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
+import android.util.SparseArray;
 import android.view.View;
 
 import androidx.annotation.NonNull;
 
 import java.util.ArrayList;
-import java.util.List;
 
 public class SelectionDrawer {
 
     private final Matrix matrix = new Matrix();
 
-    private final ArrayList<SearchRecordItem> searchRecordItems = new ArrayList<>();
+    private SparseArray<SearchRecord> searchRecords = new SparseArray<>();
     private final RectF tempRect = new RectF(0, 0, 256, 256);
     private final RectF tempPosRect = new RectF();
     private final View view;
@@ -26,7 +26,7 @@ public class SelectionDrawer {
     private final Paint rectHighlightPaint = new Paint();
     final float[] srcArray = new float[8];
     final float[] dstArray = new float[8];
-
+    private int currentPage;
 
     private float currentXOffset = 0;
     private float currentYOffset = 0;
@@ -38,23 +38,32 @@ public class SelectionDrawer {
         rectHighlightPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DARKEN));
     }
 
-    public void onDraw(Canvas canvas) {
-        for (SearchRecordItem searchRecordItem : searchRecordItems) {
-            RectF[] rects = searchRecordItem.rects;
-            for (RectF rect : rects) {
-                drawRect(canvas, rect);
+    public void onDraw(Canvas canvas, PdfFile pdfFile) {
+        for (SearchRecord searchRecord : getSearchRecords()) {
+            for (SearchRecordItem searchRecordItem : searchRecord.getSearchRecordItems()) {
+                RectF[] rects = searchRecordItem.rects;
+                for (RectF rect : rects) {
+                    drawRect(canvas, rect, pdfFile, searchRecord.pageIdx);
+                }
             }
         }
     }
 
-    private void drawRect(Canvas canvas, RectF rect) {
-        sourceToViewRectFF(rect, tempPosRect);
+    private void drawRect(Canvas canvas, RectF rect, PdfFile pdfFile, int page) {
+        sourceToViewRectFF(rect, tempPosRect, pdfFile, page);
         matrix.reset();
         int bmWidth = (int) rect.width();
         int bmHeight = (int) rect.height();
         setMatrixArray(srcArray, 0, 0, bmWidth, 0, bmWidth, bmHeight, 0, bmHeight);
-        setMatrixArray(dstArray, tempPosRect.left, tempPosRect.top, tempPosRect.right,
-                tempPosRect.top, tempPosRect.right, tempPosRect.bottom, tempPosRect.left, tempPosRect.bottom);
+        setMatrixArray(dstArray,
+                tempPosRect.left,
+                tempPosRect.top,
+                tempPosRect.right,
+                tempPosRect.top,
+                tempPosRect.right,
+                tempPosRect.bottom,
+                tempPosRect.left,
+                tempPosRect.bottom);
 
         matrix.setPolyToPoly(srcArray, 0, dstArray, 0, 4);
         matrix.postRotate(0, view.getWidth(), view.getHeight());
@@ -66,18 +75,19 @@ public class SelectionDrawer {
         canvas.restore();
     }
 
-    private void sourceToViewRectFF(@NonNull RectF sRect, @NonNull RectF vTarget) {
-        vTarget.set(
-                sRect.left * scale + currentXOffset,
-                sRect.top * scale + currentYOffset,
-                sRect.right * scale + currentXOffset,
-                sRect.bottom * scale + currentYOffset
+    private void sourceToViewRectFF(@NonNull RectF sourceRect, @NonNull RectF targetRect, PdfFile pdfFile, int page) {
+        int pageX = (int) pdfFile.getSecondaryPageOffset(page, scale);
+        int pageY = (int) pdfFile.getPageOffset(page, scale);
+        targetRect.set(
+                sourceRect.left * scale + ((pageX)) + currentXOffset,
+                sourceRect.top * scale + ((pageY)) + currentYOffset,
+                sourceRect.right * scale + ((pageX)) + currentXOffset,
+                sourceRect.bottom * scale + ((pageY)) + currentYOffset
         );
     }
 
-    public void setSearchRecordItems(List<SearchRecordItem> searchRecordItems) {
-        this.searchRecordItems.clear();
-        this.searchRecordItems.addAll(searchRecordItems);
+    public void setSearchRecords(SparseArray<SearchRecord> searchRecords) {
+        this.searchRecords = searchRecords;
     }
 
     public void setScale(float scale) {
@@ -105,5 +115,25 @@ public class SelectionDrawer {
 
     public void setCurrentYOffset(float currentYOffset) {
         this.currentYOffset = currentYOffset;
+    }
+
+    public void setCurrentPage(int currentPage) {
+        this.currentPage = currentPage;
+    }
+
+    /**
+     * To draw search result after and before current page
+     **/
+    private ArrayList<SearchRecord> getSearchRecords() {
+        ArrayList<SearchRecord> list = new ArrayList<>();
+
+        for (int index = currentPage - 1; index <= currentPage + 1; index++) {
+            SearchRecord searchRecord = searchRecords.get(index);
+            if (searchRecord != null) {
+                list.add(searchRecord);
+            }
+        }
+
+        return list;
     }
 }

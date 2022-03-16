@@ -34,6 +34,8 @@ import android.os.Build;
 import android.os.HandlerThread;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.SparseArray;
+import android.view.MotionEvent;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
@@ -372,6 +374,7 @@ public class PDFView extends RelativeLayout {
         // difference between UserPages and DocumentPages
         pageNb = pdfFile.determineValidPageNumberFrom(pageNb);
         currentPage = pageNb;
+        selectionDrawer.setCurrentPage(currentPage);
 
         loadPages();
 
@@ -679,8 +682,6 @@ public class PDFView extends RelativeLayout {
 
         }
 
-        selectionDrawer.onDraw(canvas);
-
         // Draws parts
         for (PagePart part : cacheManager.getPageParts()) {
             drawPart(canvas, part);
@@ -700,6 +701,14 @@ public class PDFView extends RelativeLayout {
         // Restores the canvas position
         canvas.translate(-currentXOffset, -currentYOffset);
 
+        selectionDrawer.onDraw(canvas, pdfFile);
+
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        Toast.makeText(getContext(), "x=" + ev.getX() + " y=" + ev.getY(), Toast.LENGTH_SHORT).show();
+        return super.onInterceptTouchEvent(ev);
     }
 
     private void drawWithListener(Canvas canvas, int page, OnDrawListener listener) {
@@ -1391,8 +1400,9 @@ public class PDFView extends RelativeLayout {
     }
 
     public void searchText(String query) {
-        List<SearchRecordItem> searchRecordItems = pdfFile.findAllMatches(query);
-        selectionDrawer.setSearchRecordItems(searchRecordItems);
+        SparseArray<SearchRecord> searchRecordItems = pdfFile.findAllMatches(query);
+        selectionDrawer.setSearchRecords(searchRecordItems);
+        invalidate();
         Toast.makeText(getContext(), "Found items count:" + searchRecordItems.size(), Toast.LENGTH_SHORT).show();
     }
 
