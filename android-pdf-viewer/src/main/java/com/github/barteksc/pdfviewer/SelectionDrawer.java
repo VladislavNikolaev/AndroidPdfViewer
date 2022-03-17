@@ -1,6 +1,7 @@
 package com.github.barteksc.pdfviewer;
 
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
@@ -18,15 +19,18 @@ public class SelectionDrawer {
     private final Matrix matrix = new Matrix();
 
     private SparseArray<SearchRecord> searchRecords = new SparseArray<>();
+    private ArrayList<SearchRecordItem> searchRecordItems = new ArrayList<>();
     private final RectF tempRect = new RectF(0, 0, 256, 256);
     private final RectF tempPosRect = new RectF();
     private final View view;
 
     private float scale;
     private final Paint rectHighlightPaint = new Paint();
+    private final Paint currentRectHighlightPaint = new Paint();
     final float[] srcArray = new float[8];
     final float[] dstArray = new float[8];
     private int currentPage;
+    private int currentSearchRecordItemIndex = -1;
 
     private float currentXOffset = 0;
     private float currentYOffset = 0;
@@ -36,20 +40,32 @@ public class SelectionDrawer {
         matrix.mapRect(tempRect);
         rectHighlightPaint.setColor(0x80ffff00);
         rectHighlightPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DARKEN));
+
+        currentRectHighlightPaint.setColor(Color.RED);
+        currentRectHighlightPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DARKEN));
     }
 
     public void onDraw(Canvas canvas, PdfFile pdfFile) {
         for (SearchRecord searchRecord : getSearchRecords()) {
             for (SearchRecordItem searchRecordItem : searchRecord.getSearchRecordItems()) {
-                RectF[] rects = searchRecordItem.rects;
-                for (RectF rect : rects) {
-                    drawRect(canvas, rect, pdfFile, searchRecord.pageIdx);
-                }
+                drawSearchRecordItem(canvas, rectHighlightPaint, pdfFile, searchRecordItem);
             }
+        }
+
+        if (currentSearchRecordItemIndex >= 0) {
+            SearchRecordItem searchRecordItem = searchRecordItems.get(currentSearchRecordItemIndex);
+            drawSearchRecordItem(canvas, currentRectHighlightPaint, pdfFile, searchRecordItem);
         }
     }
 
-    private void drawRect(Canvas canvas, RectF rect, PdfFile pdfFile, int page) {
+    private void drawSearchRecordItem(Canvas canvas, Paint paint, PdfFile pdfFile, SearchRecordItem searchRecordItem) {
+        RectF[] rects = searchRecordItem.rects;
+        for (RectF rect : rects) {
+            drawRect(canvas, paint, rect, pdfFile, searchRecordItem.getPageIdx());
+        }
+    }
+
+    private void drawRect(Canvas canvas, Paint paint, RectF rect, PdfFile pdfFile, int page) {
         sourceToViewRectFF(rect, tempPosRect, pdfFile, page);
         matrix.reset();
         int bmWidth = (int) rect.width();
@@ -71,7 +87,7 @@ public class SelectionDrawer {
         canvas.save();
         canvas.concat(matrix);
         tempPosRect.set(0, 0, bmWidth, bmHeight);
-        canvas.drawRect(tempPosRect, rectHighlightPaint);
+        canvas.drawRect(tempPosRect, paint);
         canvas.restore();
     }
 
@@ -88,6 +104,47 @@ public class SelectionDrawer {
 
     public void setSearchRecords(SparseArray<SearchRecord> searchRecords) {
         this.searchRecords = searchRecords;
+        searchRecordItems.clear();
+        for (int i = 0; i < searchRecords.size(); i++) {
+            SearchRecord searchRecord = searchRecords.valueAt(i);
+            searchRecordItems.addAll(searchRecord.getSearchRecordItems());
+        }
+        setInitialValueForCurrentSearchRecordItemIndex();
+    }
+
+    public int showNextSearchRecordItem() {
+        currentSearchRecordItemIndex++;
+        if (currentSearchRecordItemIndex >= searchRecordItems.size()) {
+            setInitialValueForCurrentSearchRecordItemIndex();
+        }
+        if (currentSearchRecordItemIndex < searchRecordItems.size()) {
+            return searchRecordItems.get(currentSearchRecordItemIndex).getPageIdx();
+        }
+
+        return -1;
+    }
+
+    public int showPreviousSearchRecordItem() {
+        currentSearchRecordItemIndex--;
+        if (currentSearchRecordItemIndex < 0) {
+            if (searchRecordItems.isEmpty())
+                currentSearchRecordItemIndex = -1;
+            else
+                currentSearchRecordItemIndex = searchRecordItems.size() - 1;
+        }
+
+        if (currentSearchRecordItemIndex < searchRecordItems.size()) {
+            return searchRecordItems.get(currentSearchRecordItemIndex).getPageIdx();
+        }
+
+        return -1;
+    }
+
+    private void setInitialValueForCurrentSearchRecordItemIndex() {
+        if (searchRecordItems.isEmpty())
+            currentSearchRecordItemIndex = -1;
+        else
+            currentSearchRecordItemIndex = 0;
     }
 
     public void setScale(float scale) {

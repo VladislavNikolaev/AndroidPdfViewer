@@ -23,7 +23,6 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.provider.OpenableColumns;
 import android.util.Log;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
@@ -61,7 +60,7 @@ public class PDFViewActivity extends AppCompatActivity implements OnPageChangeLi
     private final static int REQUEST_CODE = 42;
     public static final int PERMISSION_CODE = 42042;
 
-//    public static final String SAMPLE_FILE = "sample.pdf";
+    //    public static final String SAMPLE_FILE = "sample.pdf";
     public static final String SAMPLE_FILE = "pdf-sample.pdf";
     public static final String READ_EXTERNAL_STORAGE = "android.permission.READ_EXTERNAL_STORAGE";
 
@@ -73,6 +72,12 @@ public class PDFViewActivity extends AppCompatActivity implements OnPageChangeLi
 
     @ViewById
     Button searchButton;
+
+    @ViewById
+    Button searchNextButton;
+
+    @ViewById
+    Button searchPreviousButton;
 
     @NonConfigurationInstance
     Uri uri;
@@ -121,12 +126,10 @@ public class PDFViewActivity extends AppCompatActivity implements OnPageChangeLi
         }
         setTitle(pdfFileName);
 
-        searchButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                pdfView.searchText(etSearch.getText().toString());
-            }
-        });
+        searchButton.setOnClickListener(view -> pdfView.searchText(etSearch.getText().toString()));
+
+        searchNextButton.setOnClickListener(view -> pdfView.searchNext());
+        searchPreviousButton.setOnClickListener(view -> pdfView.searchPrevious());
     }
 
     private void displayFromAsset(String assetFileName) {

@@ -1400,10 +1400,28 @@ public class PDFView extends RelativeLayout {
     }
 
     public void searchText(String query) {
-        SparseArray<SearchRecord> searchRecordItems = pdfFile.findAllMatches(query);
-        selectionDrawer.setSearchRecords(searchRecordItems);
+        SparseArray<SearchRecord> searchRecords = pdfFile.findAllMatches(query);
+        selectionDrawer.setSearchRecords(searchRecords);
+        if (searchRecords.size() > 0) {
+            jumpTo(searchRecords.valueAt(0).pageIdx, true);
+        }
         invalidate();
-        Toast.makeText(getContext(), "Found items count:" + searchRecordItems.size(), Toast.LENGTH_SHORT).show();
+        Toast.makeText(getContext(), "Found items count:" + searchRecords.size(), Toast.LENGTH_SHORT).show();
+    }
+
+
+    public void searchNext() {
+        int pageIndex = selectionDrawer.showNextSearchRecordItem();
+        invalidate();
+        if (pageIndex >= 0)
+            jumpTo(pageIndex, true);
+    }
+
+    public void searchPrevious() {
+        int pageIndex = selectionDrawer.showPreviousSearchRecordItem();
+        invalidate();
+        if (pageIndex >= 0)
+            jumpTo(pageIndex, true);
     }
 
     private void setCurrentXOffset(float currentXOffset) {
