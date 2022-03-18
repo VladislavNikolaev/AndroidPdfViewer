@@ -35,7 +35,6 @@ import android.os.HandlerThread;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.SparseArray;
-import android.view.MotionEvent;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
@@ -55,6 +54,7 @@ import com.github.barteksc.pdfviewer.listener.OnPageChangeListener;
 import com.github.barteksc.pdfviewer.listener.OnPageErrorListener;
 import com.github.barteksc.pdfviewer.listener.OnPageScrollListener;
 import com.github.barteksc.pdfviewer.listener.OnRenderListener;
+import com.github.barteksc.pdfviewer.listener.OnSelectionListener;
 import com.github.barteksc.pdfviewer.listener.OnTapListener;
 import com.github.barteksc.pdfviewer.model.PagePart;
 import com.github.barteksc.pdfviewer.scroll.ScrollHandle;
@@ -213,7 +213,7 @@ public class PDFView extends RelativeLayout {
 
     private boolean enableSwipe = true;
 
-    private boolean doubletapEnabled = true;
+    private boolean doubleTapEnabled = true;
 
     private boolean nightMode = false;
 
@@ -289,7 +289,10 @@ public class PDFView extends RelativeLayout {
      */
     private Configurator waitingDocumentConfigurator;
 
+    private SearchDrawer searchDrawer;
     private SelectionDrawer selectionDrawer;
+
+    OnSelectionListener onSelectionListener;
 
     /**
      * Construct the initial view
@@ -303,7 +306,8 @@ public class PDFView extends RelativeLayout {
             return;
         }
 
-        selectionDrawer = new SelectionDrawer(this);
+        selectionDrawer = new SelectionDrawer(getContext());
+        searchDrawer = new SearchDrawer(this);
         cacheManager = new CacheManager();
         animationManager = new AnimationManager(this);
         dragPinchManager = new DragPinchManager(this, animationManager);
@@ -374,7 +378,7 @@ public class PDFView extends RelativeLayout {
         // difference between UserPages and DocumentPages
         pageNb = pdfFile.determineValidPageNumberFrom(pageNb);
         currentPage = pageNb;
-        selectionDrawer.setCurrentPage(currentPage);
+        searchDrawer.setCurrentPage(currentPage);
 
         loadPages();
 
@@ -451,12 +455,12 @@ public class PDFView extends RelativeLayout {
         }
     }
 
-    void enableDoubletap(boolean enableDoubletap) {
-        this.doubletapEnabled = enableDoubletap;
+    void enableDoubleTap(boolean enableDoubleTap) {
+        this.doubleTapEnabled = enableDoubleTap;
     }
 
-    boolean isDoubletapEnabled() {
-        return doubletapEnabled;
+    boolean isDoubleTapEnabled() {
+        return doubleTapEnabled;
     }
 
     void onPageError(PageRenderingException ex) {
@@ -701,14 +705,9 @@ public class PDFView extends RelativeLayout {
         // Restores the canvas position
         canvas.translate(-currentXOffset, -currentYOffset);
 
-        selectionDrawer.onDraw(canvas, pdfFile);
+        searchDrawer.onDraw(canvas, pdfFile);
 
-    }
-
-    @Override
-    public boolean onInterceptTouchEvent(MotionEvent ev) {
-        Toast.makeText(getContext(), "x=" + ev.getX() + " y=" + ev.getY(), Toast.LENGTH_SHORT).show();
-        return super.onInterceptTouchEvent(ev);
+        selectionDrawer.onDraw(canvas);
     }
 
     private void drawWithListener(Canvas canvas, int page, OnDrawListener listener) {
@@ -1098,7 +1097,7 @@ public class PDFView extends RelativeLayout {
      */
     public void zoomTo(float zoom) {
         this.zoom = zoom;
-        selectionDrawer.setScale(zoom);
+        searchDrawer.setScale(zoom);
     }
 
     /**
@@ -1206,6 +1205,54 @@ public class PDFView extends RelativeLayout {
 
     private void setScrollHandle(ScrollHandle scrollHandle) {
         this.scrollHandle = scrollHandle;
+    }
+
+    public void setSelectionAtPage(int pageIdx, int st, int ed) {
+        selectionDrawer.setSelectionAtPage(pageIdx, st, ed);
+        invalidate();
+    }
+
+    public void clearSelection() {
+        if (onSelectionListener != null) {
+            onSelectionListener.onSelectionChanged(false);
+        }
+
+        if (selectionDrawer.hasSelection()) invalidate();
+
+        selectionDrawer.setHasSelection(false);
+    }
+
+    public boolean hasSelection() {
+        return selectionDrawer.hasSelection();
+    }
+
+    void onSelectionStarted() {
+        selectionDrawer.setHasSelection(true);
+        if (onSelectionListener != null) {
+            onSelectionListener.onSelectionChanged(true);
+        }
+    }
+
+    public boolean isTouchCoversWord(float x, float y, float toleranceFactor) {
+        if (pdfFile == null)
+            return false;
+
+        Word word = pdfFile.getWordSelectedByPosition(x, y, toleranceFactor,
+                getCurrentXOffset(), getCurrentYOffset(), zoom, isSwipeVertical());
+        if (word == null) return false;
+        setSelectionAtPage(word.getPageIndex(), word.getStart(), word.getEnd());
+        return true;
+    }
+
+    public void setOnSelectionListener(OnSelectionListener onSelectionListener) {
+        this.onSelectionListener = onSelectionListener;
+    }
+
+    public void getSelectedRects(ArrayList<RectF> rectPagePool, int selSt, int selEd) {
+        float mappedX = -getCurrentXOffset() + dragPinchManager.getLastX();
+        float mappedY = -getCurrentYOffset() + dragPinchManager.getLastY();
+        int currentSelectedPage = selectionDrawer.getCurrentSelectedPage();
+        pdfFile.getSelectedRects(rectPagePool, currentSelectedPage, selSt, selEd, mappedX, mappedY, isSwipeVertical(), zoom);
     }
 
     /**
@@ -1401,7 +1448,7 @@ public class PDFView extends RelativeLayout {
 
     public void searchText(String query) {
         SparseArray<SearchRecord> searchRecords = pdfFile.findAllMatches(query);
-        selectionDrawer.setSearchRecords(searchRecords);
+        searchDrawer.setSearchRecords(searchRecords);
         if (searchRecords.size() > 0) {
             jumpTo(searchRecords.valueAt(0).pageIdx, true);
         }
@@ -1411,14 +1458,14 @@ public class PDFView extends RelativeLayout {
 
 
     public void searchNext() {
-        int pageIndex = selectionDrawer.showNextSearchRecordItem();
+        int pageIndex = searchDrawer.showNextSearchRecordItem();
         invalidate();
         if (pageIndex >= 0)
             jumpTo(pageIndex, true);
     }
 
     public void searchPrevious() {
-        int pageIndex = selectionDrawer.showPreviousSearchRecordItem();
+        int pageIndex = searchDrawer.showPreviousSearchRecordItem();
         invalidate();
         if (pageIndex >= 0)
             jumpTo(pageIndex, true);
@@ -1426,13 +1473,26 @@ public class PDFView extends RelativeLayout {
 
     private void setCurrentXOffset(float currentXOffset) {
         this.currentXOffset = currentXOffset;
-        selectionDrawer.setCurrentXOffset(currentXOffset);
+        searchDrawer.setCurrentXOffset(currentXOffset);
     }
 
     private void setCurrentYOffset(float currentYOffset) {
         this.currentYOffset = currentYOffset;
-        selectionDrawer.setCurrentYOffset(currentYOffset);
+        searchDrawer.setCurrentYOffset(currentYOffset);
     }
+
+    PointF getHandleRightPosition() {
+        PointF pointF = new PointF();
+        pointF.set(selectionDrawer.handleRightPos.right, selectionDrawer.handleRightPos.bottom);
+        return pointF;
+    }
+
+    PointF getHandleLeftPosition() {
+        PointF pointF = new PointF();
+        pointF.set(selectionDrawer.handleRightPos.left, selectionDrawer.handleRightPos.bottom);
+        return pointF;
+    }
+
 
     /**
      * Use custom source as pdf source
@@ -1640,8 +1700,8 @@ public class PDFView extends RelativeLayout {
             return this;
         }
 
-        public Configurator disableLongpress() {
-            PDFView.this.dragPinchManager.disableLongpress();
+        public Configurator disableLongPress() {
+            dragPinchManager.disableLongPress();
             return this;
         }
 
@@ -1664,7 +1724,7 @@ public class PDFView extends RelativeLayout {
             PDFView.this.callbacks.setLinkHandler(linkHandler);
             PDFView.this.setSwipeEnabled(enableSwipe);
             PDFView.this.setNightMode(nightMode);
-            PDFView.this.enableDoubletap(enableDoubletap);
+            PDFView.this.enableDoubleTap(enableDoubletap);
             PDFView.this.setDefaultPage(defaultPage);
             PDFView.this.setSwipeVertical(!swipeHorizontal);
             PDFView.this.enableAnnotationRendering(annotationRendering);

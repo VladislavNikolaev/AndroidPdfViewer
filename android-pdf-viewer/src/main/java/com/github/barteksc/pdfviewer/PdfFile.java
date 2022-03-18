@@ -18,8 +18,11 @@ package com.github.barteksc.pdfviewer;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.util.Log;
 import android.util.SparseArray;
 import android.util.SparseBooleanArray;
+
+import androidx.annotation.Nullable;
 
 import com.ahmer.afzal.pdfium.PdfDocument;
 import com.ahmer.afzal.pdfium.PdfiumCore;
@@ -85,7 +88,7 @@ class PdfFile {
      */
     private final List<Float> pageSpacing = new ArrayList<>();
 
-    public PdfPage[] pages;
+    private PdfPage[] pages;
 
     /**
      * Calculated document length (width or height, depending on swipe mode)
@@ -136,7 +139,7 @@ class PdfFile {
                 originalMaxHeightPageSize = pageSize;
             }
 
-            PdfPage page = new PdfPage(pdfiumCore, pdfDocument, pageIndex, pageSize, isVertical, lengthAlongScrollAxis);
+            PdfPage page = new PdfPage(pdfiumCore, pdfDocument, pageIndex, pageSize);
             page.prepareText();
             pages[i] = page;
             lengthAlongScrollAxis += (isVertical ? pageSize.getHeight() : pageSize.getWidth()) + GAP;
@@ -437,5 +440,69 @@ class PdfFile {
         }
 
         return documentPage;
+    }
+
+    @Nullable
+    public Word getWordSelectedByPosition(float x, float y, float tolFactor, float currentXOffset,
+                                          float currentYOffset, float zoom, boolean isSwipeVertical) {
+        float mappedX = -currentXOffset + x;
+        float mappedY = -currentYOffset + y;
+        int pageIndex = getPageAtOffset(isSwipeVertical ? mappedY : mappedX, zoom);
+        pageIndex = documentPage(pageIndex);
+        SizeF pageSize = getScaledPageSize(pageIndex, zoom);
+
+        PdfPage page = pages[pageIndex];
+        long tid = page.getTid();
+        if (tid != 0) {
+            int pageX = (int) getSecondaryPageOffset(pageIndex, zoom);
+            int pageY = (int) getPageOffset(pageIndex, zoom);
+
+            return page.getWordAtPosition(pageX, pageY, pageSize, mappedX, mappedY, tolFactor);
+
+        }
+        return null;
+    }
+
+    public long getPageTid(int pageIdx) {
+        PdfPage page = pages[pageIdx];
+        return page.getTid();
+    }
+
+    public void getSelectedRects(ArrayList<RectF> rectPagePool, int currentSelectedPageIdx, int selSt, int selEd, float mappedX, float mappedY, boolean swipeVertical, float zoom) {
+        int pageIdx = getPageAtOffset(swipeVertical ? mappedY : mappedX, zoom);
+        PdfPage page = pages[pageIdx];
+        long tid = page.getTid();
+        long currentPageTid = pages[currentSelectedPageIdx].getTid();
+        if (isNotCurrentPage(currentPageTid, tid)) {
+            return;
+        }
+        rectPagePool.clear();
+        if (tid != 0) {
+            if (selEd == -1) {
+                selEd = page.getAllText().length();
+            }
+
+            if (selEd < selSt) {
+                int tmp = selSt;
+                selSt = selEd;
+                selEd = tmp;
+            }
+            selEd -= selSt;
+            if (selEd > 0) {
+                long pagePtr = pdfDocument.mNativePagesPtr.get(pageIdx);
+                pdfiumCore.getPageSize(pdfDocument, pageIdx);
+                SizeF size = getPageSize(pageIdx);
+                int rectCount = pdfiumCore.getTextRects(pagePtr, 0, 0,
+                        new Size((int) size.getWidth(), (int) size.getHeight()), rectPagePool, tid, selSt, selEd);
+                Log.v(getClass().getSimpleName(), "getTextRects: " + selSt + "$" + selEd + "$" + rectCount + "$" + rectPagePool);
+                if (rectCount >= 0 && rectPagePool.size() > rectCount) {
+                    rectPagePool.subList(rectCount, rectPagePool.size()).clear();
+                }
+            }
+        }
+    }
+
+    private boolean isNotCurrentPage(long currentTid, long tid) {
+        return currentTid != 0 && tid != currentTid;
     }
 }

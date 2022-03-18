@@ -2,6 +2,8 @@ package com.github.barteksc.pdfviewer;
 
 import android.graphics.RectF;
 
+import androidx.annotation.Nullable;
+
 import com.ahmer.afzal.pdfium.PdfDocument;
 import com.ahmer.afzal.pdfium.PdfiumCore;
 import com.ahmer.afzal.pdfium.util.Size;
@@ -22,17 +24,13 @@ public class PdfPage {
     private SizeF currentSize;
     private String allText;
     private BreakIteratorHelper pageBreakIterator;
-    private final long offsetAlongScrollAxis;
-    private final boolean isVertical;
 
     public PdfPage(PdfiumCore pdfiumCore, PdfDocument pdfDocument,
-                   int pageIdx, Size originalSize, boolean isVertical, long offsetAlongScrollAxis) {
+                   int pageIdx, Size originalSize) {
         this.pdfiumCore = pdfiumCore;
         this.pdfDocument = pdfDocument;
         this.pageIdx = pageIdx;
         this.originalSize = originalSize;
-        this.isVertical = isVertical;
-        this.offsetAlongScrollAxis = offsetAlongScrollAxis;
     }
 
     public void setCurrentSize(SizeF currentSize) {
@@ -84,6 +82,10 @@ public class PdfPage {
         }
     }
 
+    public String getAllText() {
+        return allText;
+    }
+
     public void close() {
         if (pid.get() != 0) {
             synchronized (pid) {
@@ -132,5 +134,23 @@ public class PdfPage {
                 data.add(new SearchRecordItem(start, end, rects, pageIdx));
             }
         }
+    }
+
+    @Nullable
+    public Word getWordAtPosition(int pageX, int pageY, SizeF pageSize,
+                                  float mappedX, float mappedY, float tolFactor) {
+        long pagePtr = pdfDocument.mNativePagesPtr.get(pageIdx);
+        int charIdx = pdfiumCore.nativeGetCharIndexAtCoord(pagePtr, pageSize.getWidth(), pageSize.getHeight(),
+                tid, Math.abs(mappedX - pageX), Math.abs(mappedY - pageY), 10.0 * tolFactor, 10.0 * tolFactor);
+
+        if (charIdx >= 0) {
+
+            int start = pageBreakIterator.previous();
+            int end = pageBreakIterator.following(charIdx);
+            return new Word(pageIdx, start, end);
+
+        }
+
+        return null;
     }
 }

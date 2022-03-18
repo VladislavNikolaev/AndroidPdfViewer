@@ -46,6 +46,12 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
     private boolean scrolling = false;
     private boolean scaling = false;
     private boolean enabled = false;
+    private boolean isDraggingRight = false; // handleRight
+
+    private float lastX;
+    private float lastY;
+
+    private PointF cursorPositionStart = new PointF();
 
     DragPinchManager(PDFView pdfView, AnimationManager animationManager) {
         this.pdfView = pdfView;
@@ -63,7 +69,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         enabled = false;
     }
 
-    void disableLongpress() {
+    void disableLongPress() {
         gestureDetector.setIsLongpressEnabled(false);
     }
 
@@ -139,7 +145,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
 
     @Override
     public boolean onDoubleTap(MotionEvent e) {
-        if (!pdfView.isDoubletapEnabled()) {
+        if (!pdfView.isDoubleTapEnabled()) {
             return false;
         }
 
@@ -197,6 +203,14 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
     @Override
     public void onLongPress(MotionEvent e) {
         pdfView.callbacks.callOnLongPress(e);
+        if (pdfView.hasSelection()) {
+            pdfView.clearSelection();
+        }
+        if (pdfView.isTouchCoversWord(e.getX(), e.getY(), 1.5f)) {
+            pdfView.onSelectionStarted();
+            isDraggingRight = true;
+            cursorPositionStart.set(pdfView.getHandleRightPosition());
+        }
     }
 
     @Override
@@ -289,7 +303,8 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         if (!enabled) {
             return false;
         }
-
+        lastX = event.getX();
+        lastY = event.getY();
         boolean retVal = scaleGestureDetector.onTouchEvent(event);
         retVal = gestureDetector.onTouchEvent(event) || retVal;
 
@@ -313,5 +328,13 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         float absX = Math.abs(velocityX);
         float absY = Math.abs(velocityY);
         return pdfView.isSwipeVertical() ? absY > absX : absX > absY;
+    }
+
+    public float getLastX() {
+        return lastX;
+    }
+
+    public float getLastY() {
+        return lastY;
     }
 }
