@@ -1,18 +1,3 @@
-/**
- * Copyright 2016 Bartosz Schiller
- * <p/>
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.github.barteksc.pdfviewer;
 
 import static com.github.barteksc.pdfviewer.util.Constants.Pinch.MAXIMUM_ZOOM;
@@ -20,6 +5,8 @@ import static com.github.barteksc.pdfviewer.util.Constants.Pinch.MINIMUM_ZOOM;
 
 import android.graphics.PointF;
 import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
+import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
@@ -27,6 +14,7 @@ import android.view.View;
 
 import com.ahmer.afzal.pdfium.PdfDocument;
 import com.ahmer.afzal.pdfium.util.SizeF;
+import com.github.barteksc.pdfviewer.exception.PageRenderingException;
 import com.github.barteksc.pdfviewer.model.LinkTapEvent;
 import com.github.barteksc.pdfviewer.scroll.ScrollHandle;
 import com.github.barteksc.pdfviewer.util.SnapEdge;
@@ -35,17 +23,31 @@ import com.github.barteksc.pdfviewer.util.SnapEdge;
  * This Manager takes care of moving the PDFView,
  * set its zoom track user actions.
  */
-class DragPinchManager implements GestureDetector.OnGestureListener, GestureDetector.OnDoubleTapListener, ScaleGestureDetector.OnScaleGestureListener, View.OnTouchListener {
-
-    private PDFView pdfView;
-    private AnimationManager animationManager;
-
-    private GestureDetector gestureDetector;
-    private ScaleGestureDetector scaleGestureDetector;
-
+class DragPinchManager implements GestureDetector.OnGestureListener, GestureDetector.OnDoubleTapListener,
+        ScaleGestureDetector.OnScaleGestureListener, View.OnTouchListener {
+    private static final Object lock = new Object();
+    public long currentTextPtr;
+    float lastX;
+    float lastY;
+    float orgX;
+    float orgY;
+    Drawable draggingHandle;
+    float viewPagerToGuardLastX;
+    float viewPagerToGuardLastY;
+    PointF sCursorPosStart = new PointF();
+    BreakIteratorHelper pageBreakIterator;
+    String allText;
+    float scrollValue = 0;
+    private final PDFView pdfView;
+    private final AnimationManager animationManager;
+    private final GestureDetector gestureDetector;
+    private final ScaleGestureDetector scaleGestureDetector;
     private boolean scrolling = false;
     private boolean scaling = false;
     private boolean enabled = false;
+    public boolean startInDrag;
+    private boolean enableSwipe = true;
+
 
     DragPinchManager(PDFView pdfView, AnimationManager animationManager) {
         this.pdfView = pdfView;
@@ -63,26 +65,178 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         enabled = false;
     }
 
-    void disableLongpress() {
+    void disableLongPress() {
         gestureDetector.setIsLongpressEnabled(false);
     }
 
     @Override
     public boolean onSingleTapConfirmed(MotionEvent e) {
-        boolean onTapHandled = pdfView.callbacks.callOnTap(e);
+        boolean onTapHandled = false;
+
+        if (pdfView.hasSelection) {
+            pdfView.clearSelection();
+        } else {
+            onTapHandled = pdfView.callbacks.callOnTap(e);
+        }
         boolean linkTapped = checkLinkTapped(e.getX(), e.getY());
         if (!onTapHandled && !linkTapped) {
-            ScrollHandle ps = pdfView.getScrollHandle();
-            if (ps != null && !pdfView.documentFitsView()) {
-                if (!ps.shown()) {
-                    ps.show();
+            ScrollHandle scrollHandle = pdfView.getScrollHandle();
+            if (scrollHandle != null && !pdfView.documentFitsView()) {
+                if (!scrollHandle.shown()) {
+                    scrollHandle.show();
                 } else {
-                    ps.hide();
+                    scrollHandle.hide();
                 }
             }
         }
         pdfView.performClick();
         return true;
+    }
+
+    public int getCharIdxAtPos(float x, float y, int tolFactor) {
+        PdfFile pdfFile = pdfView.pdfFile;
+        if (pdfFile == null) {
+            return -1;
+        }
+        float mappedX = -pdfView.getCurrentXOffset() + x;
+        float mappedY = -pdfView.getCurrentYOffset() + y;
+        int page = pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
+        SizeF pageSize = pdfFile.getScaledPageSize(page, pdfView.getZoom());
+
+        int pageIndex = pdfFile.documentPage(page);
+        long pagePtr = pdfFile.getPdfDocument().mNativePagesPtr.get(pageIndex);
+        Log.e("pageIndex", String.valueOf(pageIndex));
+        long tid = prepareText();
+        if (pdfView.isNotCurrentPage(tid)) {
+            return -1;
+        }
+        if (tid != 0) {
+            //int charIdx = pdfiumCore.nativeGetCharIndexAtPos(tid, posX, posY, 10.0, 10.0);
+            int pageX = (int) pdfFile.getSecondaryPageOffset(page, pdfView.getZoom());
+            int pageY = (int) pdfFile.getPageOffset(page, pdfView.getZoom());
+            return pdfFile.getPdfiumCore().nativeGetCharIndexAtCoord(pagePtr, pageSize.getWidth(), pageSize.getHeight(), tid
+                    , Math.abs(mappedX - pageX), Math.abs(mappedY - pageY), 10.0 * tolFactor, 10.0 * tolFactor);
+        }
+
+
+
+        /*
+        if (pdfFile == null) {
+            return 0;
+        }
+        pdfView.sCursorPos.set(mappedX, mappedY);
+
+       // float mappedX = -pdfView.getCurrentXOffset() + x;
+       // float mappedY = -pdfView.getCurrentYOffset() + y;
+        int page = pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
+        int  pageX = (int) pdfView.pdfFile.getSecondaryPageOffset(page, pdfView.getZoom());
+        int  pageY = (int) pdfView.pdfFile.getPageOffset(page, pdfView.getZoom());
+
+        float curX= Math.abs(mappedX - pageX);
+        float curY=Math.abs(mappedY - pageY);
+
+
+        int pageIndex = pdfView.pdfFile.documentPage(page);
+        long pagePtr = pdfView.pdfFile.pdfDocument.mNativePagesPtr.get(pageIndex);
+        SizeF pageSize = pdfFile.getScaledPageSize(page, pdfView.getZoom());
+        prepareText();
+        if (tid != 0) {
+            return pdfFile.getPdfiumCore().nativeGetCharIndexAtCoord(pagePtr, pageSize.getWidth(), pageSize.getHeight(), tid
+                    ,  curX , curY , 10, 10);
+
+        }*/
+        return -1;
+    }
+
+    public int getCharIdxAt(float x, float y, int tolFactor) {
+        PdfFile pdfFile = pdfView.pdfFile;
+        if (pdfFile == null) {
+            return -1;
+        }
+        int page = pdfView.currentPage;
+        SizeF pageSize = pdfFile.getPageSize(page);
+
+        int pageIndex = pdfFile.documentPage(page);
+        long pagePtr = pdfFile.getPdfDocument().mNativePagesPtr.get(pageIndex);
+        Log.e("pageIndex", String.valueOf(pageIndex));
+        long tid = prepareText();
+        if (pdfView.isNotCurrentPage(tid)) {
+            return -1;
+        }
+        if (tid != 0) {
+            //int charIdx = pdfiumCore.nativeGetCharIndexAtPos(tid, posX, posY, 10.0, 10.0);
+            int pageX = (int) pdfFile.getSecondaryPageOffset(page, pdfView.getZoom());
+            int pageY = (int) pdfFile.getPageOffset(page, pdfView.getZoom());
+            return pdfFile.getPdfiumCore().nativeGetCharIndexAtCoord(pagePtr, pageSize.getWidth(), pageSize.getHeight(), tid
+                    , x, y, 10.0 * tolFactor, 10.0 * tolFactor);
+        }
+
+        /*
+        if (pdfFile == null) {
+            return 0;
+        }
+        pdfView.sCursorPos.set(mappedX, mappedY);
+
+       // float mappedX = -pdfView.getCurrentXOffset() + x;
+       // float mappedY = -pdfView.getCurrentYOffset() + y;
+        int page = pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
+        int  pageX = (int) pdfView.pdfFile.getSecondaryPageOffset(page, pdfView.getZoom());
+        int  pageY = (int) pdfView.pdfFile.getPageOffset(page, pdfView.getZoom());
+
+        float curX= Math.abs(mappedX - pageX);
+        float curY=Math.abs(mappedY - pageY);
+
+
+        int pageIndex = pdfView.pdfFile.documentPage(page);
+        long pagePtr = pdfView.pdfFile.pdfDocument.mNativePagesPtr.get(pageIndex);
+        SizeF pageSize = pdfFile.getScaledPageSize(page, pdfView.getZoom());
+        prepareText();
+        if (tid != 0) {
+            return pdfFile.getPdfiumCore().nativeGetCharIndexAtCoord(pagePtr, pageSize.getWidth(), pageSize.getHeight(), tid
+                    ,  curX , curY , 10, 10);
+
+        }*/
+        return -1;
+    }
+
+    private boolean wordTapped(float x, float y, float tolFactor) {
+        PdfFile pdfFile = pdfView.pdfFile;
+        if (pdfFile == null) {
+            return false;
+        }
+
+        float mappedX = -pdfView.getCurrentXOffset() + x;
+        float mappedY = -pdfView.getCurrentYOffset() + y;
+        int page = pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
+        SizeF pageSize = pdfFile.getScaledPageSize(page, pdfView.getZoom());
+
+        int pageIndex = pdfFile.documentPage(page);
+        long pagePtr = pdfFile.getPdfDocument().mNativePagesPtr.get(pageIndex);
+
+        long tid = prepareText();
+        currentTextPtr = tid;
+        if (tid != 0) {
+            //int charIdx = pdfiumCore.nativeGetCharIndexAtPos(tid, posX, posY, 10.0, 10.0);
+            int pageX = (int) pdfFile.getSecondaryPageOffset(page, pdfView.getZoom());
+            int pageY = (int) pdfFile.getPageOffset(page, pdfView.getZoom());
+            int charIdx = pdfFile.getPdfiumCore().nativeGetCharIndexAtCoord(pagePtr, pageSize.getWidth(), pageSize.getHeight(), tid
+                    , Math.abs(mappedX - pageX), Math.abs(mappedY - pageY), 10.0 * tolFactor, 10.0 * tolFactor);
+            String ret = null;
+
+            if (charIdx >= 0) {
+                int ed = pageBreakIterator.following(charIdx);
+                int st = pageBreakIterator.previous();
+                try {
+                    ret = allText.substring(st, ed);
+                    pdfView.setSelectionAtPage(pageIndex, st, ed);
+                    //Toast.makeText(pdfView.getContext(), String.valueOf(ret), Toast.LENGTH_SHORT).show();
+                    return true;
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        return false;
     }
 
     private boolean checkLinkTapped(float x, float y) {
@@ -94,7 +248,8 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         float mappedY = -pdfView.getCurrentYOffset() + y;
         int page = pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
         SizeF pageSize = pdfFile.getScaledPageSize(page, pdfView.getZoom());
-        int pageX, pageY;
+        int pageX;
+        int pageY;
         if (pdfView.isSwipeVertical()) {
             pageX = (int) pdfFile.getSecondaryPageOffset(page, pdfView.getZoom());
             pageY = (int) pdfFile.getPageOffset(page, pdfView.getZoom());
@@ -103,8 +258,7 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
             pageX = (int) pdfFile.getPageOffset(page, pdfView.getZoom());
         }
         for (PdfDocument.Link link : pdfFile.getPageLinks(page)) {
-            RectF mapped = pdfFile.mapRectToDevice(page, pageX, pageY, (int) pageSize.getWidth(),
-                    (int) pageSize.getHeight(), link.getBounds());
+            RectF mapped = pdfFile.mapRectToDevice(page, pageX, pageY, (int) pageSize.getWidth(), (int) pageSize.getHeight(), link.getBounds());
             mapped.sort();
             if (mapped.contains(mappedX, mappedY)) {
                 pdfView.callbacks.callLinkHandler(new LinkTapEvent(x, y, mappedX, mappedY, mapped, link));
@@ -114,11 +268,56 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         return false;
     }
 
+    public long prepareText() {
+        float mappedX = -pdfView.getCurrentXOffset() + lastX;
+        float mappedY = -pdfView.getCurrentYOffset() + lastY;
+        int page = pdfView.pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
+        return prepareText(page);
+    }
+
+    public long prepareText(int page) {
+        long tid = loadText(page);
+        if (tid != -1) {
+            allText = pdfView.pdfiumCore.nativeGetText(tid);
+            if (pageBreakIterator == null) {
+                pageBreakIterator = new BreakIteratorHelper();
+            }
+            pageBreakIterator.setText(allText);
+        }
+        return tid;
+    }
+
+    public Long loadText() {
+        float mappedX = -pdfView.getCurrentXOffset() + lastX;
+        float mappedY = -pdfView.getCurrentYOffset() + lastY;
+        if (pdfView.pdfFile == null) return 0L;
+        int page = pdfView.pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
+        return loadText(page);
+
+    }
+
+    public Long loadText(int page) {
+        synchronized (lock) {
+            if (!pdfView.pdfFile.getPdfDocument().hasPage(page)) {
+                try {
+                    pdfView.pdfFile.openPage(page);
+                } catch (PageRenderingException e) {
+                    e.printStackTrace();
+                }
+            }
+            long pagePtr = pdfView.pdfFile.getPdfDocument().mNativePagesPtr.get(page);
+            if (!pdfView.pdfFile.getPdfDocument().hasText(page)) {
+                long openTextPtr = pdfView.pdfiumCore.openText(pagePtr);
+                pdfView.pdfFile.getPdfDocument().mNativeTextPtr.put(page, openTextPtr);
+            }
+        }
+        return pdfView.pdfFile.getPdfDocument().mNativeTextPtr.get(page);
+    }
+
     private void startPageFling(MotionEvent downEvent, MotionEvent ev, float velocityX, float velocityY) {
         if (!checkDoPageFling(velocityX, velocityY)) {
             return;
         }
-
         int direction;
         if (pdfView.isSwipeVertical()) {
             direction = velocityY > 0 ? -1 : 1;
@@ -131,7 +330,6 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         float offsetY = pdfView.getCurrentYOffset() - delta * pdfView.getZoom();
         int startingPage = pdfView.findFocusPage(offsetX, offsetY);
         int targetPage = Math.max(0, Math.min(pdfView.getPageCount() - 1, startingPage + direction));
-
         SnapEdge edge = pdfView.findSnapEdge(targetPage);
         float offset = pdfView.snapOffsetForPage(targetPage, edge);
         animationManager.startPageFlingAnimation(-offset);
@@ -139,10 +337,9 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
 
     @Override
     public boolean onDoubleTap(MotionEvent e) {
-        if (!pdfView.isDoubletapEnabled()) {
+        if (!pdfView.isDoubleTapEnabled()) {
             return false;
         }
-
         if (pdfView.getZoom() < pdfView.getMidZoom()) {
             pdfView.zoomWithAnimation(e.getX(), e.getY(), pdfView.getMidZoom());
         } else if (pdfView.getZoom() < pdfView.getMaxZoom()) {
@@ -176,13 +373,32 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
 
     @Override
     public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+        if (startInDrag) return true;
         scrolling = true;
-        if (pdfView.isZooming() || pdfView.isSwipeEnabled()) {
+        if (pdfView.isZooming() || isSwipeEnabled()) {
             pdfView.moveRelativeTo(-distanceX, -distanceY);
         }
         if (!scaling || pdfView.doRenderDuringScale()) {
             pdfView.loadPageByOffset();
         }
+
+        scrollValue = distanceY;
+
+        /*
+        scrollValue = Math.abs(scrollValue);
+        if (distanceY >= 0 && pdfView.getCurrentPage() == 0) {
+            // code to hide
+            if (pdfView.hideView != null)
+                pdfView.hideView.setVisibility(View.GONE);
+        }
+        if (distanceY <= -10 && pdfView.getCurrentPage() == 0) {
+            // code to show
+            if (pdfView.hideView != null)
+                pdfView.hideView.setVisibility(View.VISIBLE);
+        }
+        */
+
+        Log.e(getClass().getSimpleName(), "ScrollY: " + distanceY);
         return true;
     }
 
@@ -192,16 +408,31 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         if (!animationManager.isFlinging()) {
             pdfView.performPageSnap();
         }
+        if (scrollValue <= -10 && pdfView.getCurrentPage() == 0) {
+            if (pdfView.hideView != null)
+                pdfView.hideView.setVisibility(View.VISIBLE);
+        }
     }
 
     @Override
     public void onLongPress(MotionEvent e) {
+        if (pdfView.hasSelection) {
+            pdfView.clearSelection();
+        }
+        if (wordTapped(e.getX(), e.getY(), 1.5f)) {
+            pdfView.hasSelection = true;
+            if (pdfView.onSelection != null) {
+                pdfView.onSelection.onSelection(true);
+            }
+            draggingHandle = pdfView.handleRight;
+            sCursorPosStart.set(pdfView.getHandleRightPosition());
+        }
         pdfView.callbacks.callOnLongPress(e);
     }
 
     @Override
     public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-        if (!pdfView.isSwipeEnabled()) {
+        if (!isSwipeEnabled()) {
             return false;
         }
         if (pdfView.isPageFlingEnabled()) {
@@ -212,11 +443,10 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
             }
             return true;
         }
-
         int xOffset = (int) pdfView.getCurrentXOffset();
         int yOffset = (int) pdfView.getCurrentYOffset();
-
-        float minX, minY;
+        float minX;
+        float minY;
         PdfFile pdfFile = pdfView.pdfFile;
         if (pdfView.isSwipeVertical()) {
             minX = -(pdfView.toCurrentScale(pdfFile.getMaxPageWidth()) - pdfView.getWidth());
@@ -225,7 +455,6 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
             minX = -(pdfFile.getDocLen(pdfView.getZoom()) - pdfView.getWidth());
             minY = -(pdfView.toCurrentScale(pdfFile.getMaxPageHeight()) - pdfView.getHeight());
         }
-
         animationManager.startFlingAnimation(xOffset, yOffset, (int) (velocityX), (int) (velocityY),
                 (int) minX, 0, (int) minY, 0);
         return true;
@@ -234,12 +463,16 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
     private void onBoundedFling(float velocityX, float velocityY) {
         int xOffset = (int) pdfView.getCurrentXOffset();
         int yOffset = (int) pdfView.getCurrentYOffset();
-
         PdfFile pdfFile = pdfView.pdfFile;
-
-        float pageStart = -pdfFile.getPageOffset(pdfView.getCurrentPage(), pdfView.getZoom());
-        float pageEnd = pageStart - pdfFile.getPageLength(pdfView.getCurrentPage(), pdfView.getZoom());
-        float minX, minY, maxX, maxY;
+        float mappedX = -pdfView.getCurrentXOffset() + lastX;
+        float mappedY = -pdfView.getCurrentYOffset() + lastY;
+        int page = pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
+        float pageStart = -pdfFile.getPageOffset(page, pdfView.getZoom());
+        float pageEnd = pageStart - pdfFile.getPageLength(page, pdfView.getZoom());
+        float minX;
+        float minY;
+        float maxX;
+        float maxY;
         if (pdfView.isSwipeVertical()) {
             minX = -(pdfView.toCurrentScale(pdfFile.getMaxPageWidth()) - pdfView.getWidth());
             minY = pageEnd + pdfView.getHeight();
@@ -289,17 +522,81 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         if (!enabled) {
             return false;
         }
-
         boolean retVal = scaleGestureDetector.onTouchEvent(event);
         retVal = gestureDetector.onTouchEvent(event) || retVal;
-
+        lastX = event.getX();
+        lastY = event.getY();
+        pdfView.redrawSelectionView();
         if (event.getAction() == MotionEvent.ACTION_UP) {
+            if (draggingHandle != null) {
+                draggingHandle = null;
+            }
+            startInDrag = false;
             if (scrolling) {
                 scrolling = false;
                 onScrollEnd(event);
             }
+        } else if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            orgX = viewPagerToGuardLastX = lastX;
+            orgY = viewPagerToGuardLastY = lastY;
+
+            if (pdfView.hasSelection) {
+                if (pdfView.handleLeft.getBounds().contains((int) orgX, (int) orgY)) {
+
+                    draggingHandle = pdfView.handleLeft;
+                    sCursorPosStart.set(pdfView.getHandleLeftPosition());
+                } else if (pdfView.handleRight.getBounds().contains((int) orgX, (int) orgY)) {
+
+                    draggingHandle = pdfView.handleRight;
+                    sCursorPosStart.set(pdfView.getHandleRightPosition());
+                }
+            }
+        } else if (event.getAction() == MotionEvent.ACTION_MOVE) {
+            dragHandle(event.getX(), event.getY());
+            viewPagerToGuardLastX = lastX;
+            viewPagerToGuardLastY = lastY;
         }
-        return retVal;
+        return true;
+    }
+
+    private void dragHandle(float x, float y) {
+        if (draggingHandle != null) {
+            startInDrag = true;
+            boolean isLeft = draggingHandle == pdfView.handleLeft;
+
+            float lineHeight = isLeft ? pdfView.lineHeightLeft : pdfView.lineHeightRight;
+            float posX = sCursorPosStart.x + (lastX - orgX) / pdfView.getZoom();
+            float posY = sCursorPosStart.y + (lastY - orgY) / pdfView.getZoom();
+            pdfView.sCursorPos.set(posX, posY);
+
+            float mappedX = -pdfView.getCurrentXOffset() + x;
+            float mappedY = -pdfView.getCurrentYOffset() + y;
+            int page = pdfView.pdfFile.getPageAtOffset(pdfView.isSwipeVertical() ? mappedY : mappedX, pdfView.getZoom());
+            int pageIndex = pdfView.pdfFile.documentPage(page);
+            int charIdx = getCharIdxAtPos(x, y - lineHeight, 10);
+            pdfView.selectionView.shouldIgnoreInvalidate = true;
+            Log.e("charIdx", String.valueOf(charIdx));
+            if (charIdx >= 0) {
+                if (isLeft) {
+                    if (pageIndex != pdfView.selectedPageIndexStart || charIdx != pdfView.selectionStart) {
+                        pdfView.selectedPageIndexStart = pageIndex;
+                        pdfView.selectionStart = charIdx;
+                        pdfView.resetSelection();
+                    }
+                } else {
+                    charIdx += 1;
+                    if (pageIndex != pdfView.selPageEd || charIdx != pdfView.selectionEnd) {
+                        pdfView.selPageEd = pageIndex;
+                        pdfView.selectionEnd = charIdx;
+                        pdfView.resetSelection();
+                    }
+                }
+            }
+            pdfView.redrawSelectionView();
+            // Toast.makeText(pdfView.getContext(),   pdfView. getSelection(), Toast.LENGTH_SHORT).show();
+            //   pdfView.text.setText(pdfView.getSelection());
+            pdfView.selectionView.shouldIgnoreInvalidate = false;
+        }
     }
 
     private void hideHandle() {
@@ -313,5 +610,13 @@ class DragPinchManager implements GestureDetector.OnGestureListener, GestureDete
         float absX = Math.abs(velocityX);
         float absY = Math.abs(velocityY);
         return pdfView.isSwipeVertical() ? absY > absX : absX > absY;
+    }
+
+    public void setSwipeEnabled(boolean swipeEnabled) {
+        enableSwipe = swipeEnabled;
+    }
+
+    public boolean isSwipeEnabled() {
+        return enableSwipe && !startInDrag;
     }
 }

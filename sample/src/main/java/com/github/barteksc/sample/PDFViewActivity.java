@@ -33,6 +33,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.ahmer.afzal.pdfium.PdfDocument;
+import com.github.barteksc.pdfviewer.PDFSelectionView;
 import com.github.barteksc.pdfviewer.PDFView;
 import com.github.barteksc.pdfviewer.listener.OnLoadCompleteListener;
 import com.github.barteksc.pdfviewer.listener.OnPageChangeListener;
@@ -78,6 +79,9 @@ public class PDFViewActivity extends AppCompatActivity implements OnPageChangeLi
 
     @ViewById
     Button searchPreviousButton;
+
+    @ViewById
+    PDFSelectionView pdfSelection;
 
     @NonConfigurationInstance
     Uri uri;
@@ -126,6 +130,7 @@ public class PDFViewActivity extends AppCompatActivity implements OnPageChangeLi
         }
         setTitle(pdfFileName);
 
+        pdfView.setSelectionView(pdfSelection);
         searchButton.setOnClickListener(view -> pdfView.searchText(etSearch.getText().toString()));
 
         searchNextButton.setOnClickListener(view -> pdfView.searchNext());

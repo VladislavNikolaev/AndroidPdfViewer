@@ -22,17 +22,12 @@ public class PdfPage {
     private SizeF currentSize;
     private String allText;
     private BreakIteratorHelper pageBreakIterator;
-    private final long offsetAlongScrollAxis;
-    private final boolean isVertical;
 
-    public PdfPage(PdfiumCore pdfiumCore, PdfDocument pdfDocument,
-                   int pageIdx, Size originalSize, boolean isVertical, long offsetAlongScrollAxis) {
+    public PdfPage(PdfiumCore pdfiumCore, PdfDocument pdfDocument, int pageIdx, Size originalSize) {
         this.pdfiumCore = pdfiumCore;
         this.pdfDocument = pdfDocument;
         this.pageIdx = pageIdx;
         this.originalSize = originalSize;
-        this.isVertical = isVertical;
-        this.offsetAlongScrollAxis = offsetAlongScrollAxis;
     }
 
     public void setCurrentSize(SizeF currentSize) {

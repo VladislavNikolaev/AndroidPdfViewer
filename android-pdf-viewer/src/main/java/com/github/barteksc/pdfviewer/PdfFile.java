@@ -136,7 +136,7 @@ class PdfFile {
                 originalMaxHeightPageSize = pageSize;
             }
 
-            PdfPage page = new PdfPage(pdfiumCore, pdfDocument, pageIndex, pageSize, isVertical, lengthAlongScrollAxis);
+            PdfPage page = new PdfPage(pdfiumCore, pdfDocument, pageIndex, pageSize);
             page.prepareText();
             pages[i] = page;
             lengthAlongScrollAxis += (isVertical ? pageSize.getHeight() : pageSize.getWidth()) + GAP;
@@ -437,5 +437,13 @@ class PdfFile {
         }
 
         return documentPage;
+    }
+
+    public PdfDocument getPdfDocument() {
+        return pdfDocument;
+    }
+
+    public PdfiumCore getPdfiumCore() {
+        return pdfiumCore;
     }
 }

@@ -11,6 +11,7 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import androidx.core.content.ContextCompat;
+
 import com.github.barteksc.pdfviewer.PDFView;
 import com.github.barteksc.pdfviewer.R;
 import com.github.barteksc.pdfviewer.util.Util;
@@ -163,7 +164,7 @@ public class DefaultScrollHandle extends RelativeLayout implements ScrollHandle 
     }
 
     @Override
-    public void setPageNum(int pageNum) {
+    public void setPageNumber(int pageNum) {
         String text = String.valueOf(pageNum);
         if (!textView.getText().equals(text)) {
             textView.setText(text);

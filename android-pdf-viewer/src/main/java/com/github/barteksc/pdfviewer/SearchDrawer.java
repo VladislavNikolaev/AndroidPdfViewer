@@ -14,7 +14,7 @@ import androidx.annotation.NonNull;
 
 import java.util.ArrayList;
 
-public class SelectionDrawer {
+public class SearchDrawer {
 
     private final Matrix matrix = new Matrix();
 
@@ -35,7 +35,7 @@ public class SelectionDrawer {
     private float currentXOffset = 0;
     private float currentYOffset = 0;
 
-    public SelectionDrawer(View view) {
+    public SearchDrawer(View view) {
         this.view = view;
         matrix.mapRect(tempRect);
         rectHighlightPaint.setColor(0x80ffff00);
@@ -110,6 +110,12 @@ public class SelectionDrawer {
             searchRecordItems.addAll(searchRecord.getSearchRecordItems());
         }
         setInitialValueForCurrentSearchRecordItemIndex();
+    }
+
+    public void clear() {
+        currentSearchRecordItemIndex = -1;
+        searchRecordItems.clear();
+        searchRecords.clear();
     }
 
     public int showNextSearchRecordItem() {
