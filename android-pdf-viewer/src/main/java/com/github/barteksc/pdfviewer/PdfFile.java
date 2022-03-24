@@ -18,6 +18,7 @@ package com.github.barteksc.pdfviewer;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.util.Log;
 import android.util.SparseArray;
 import android.util.SparseBooleanArray;
 
@@ -341,11 +342,15 @@ class PdfFile {
     }
 
     public SparseArray<SearchRecord> findAllMatches(String key) {
+        key = key + "\0";
         SparseArray<SearchRecord> searchResults = new SparseArray<>();
         for (PdfPage page : pages) {
-            SearchRecord searchRecord = findPageCached(key + "\0", page.getPageIdx(), 0);
+            SearchRecord searchRecord = findPageCached(key, page.getPageIdx(), 0);
             if (searchRecord != null) {
+                Log.d("olol", "getAllMatchOnPage start page=" + page.getPageIdx());
                 page.getAllMatchOnPage(searchRecord);
+                Log.d("olol", "getAllMatchOnPage end page=" + page.getPageIdx());
+
                 searchResults.put(page.getPageIdx(), searchRecord);
             }
         }

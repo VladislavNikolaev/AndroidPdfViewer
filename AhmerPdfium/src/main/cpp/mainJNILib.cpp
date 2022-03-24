@@ -896,7 +896,14 @@ JNI_FUNC(jint, PdfiumCore, nativeFindTextPage)(JNI_ARGS, jlong textPtr, jstring 
 }
 
 JNI_FUNC(jboolean, PdfiumCore, nativeFindTextPageNext)(JNI_ARGS, jlong searchPtr) {
-    return FPDFText_FindNext((FPDF_SCHHANDLE) searchPtr);
+    try {
+        LOGD("olol jni nativeFindTextPageNext");
+        return FPDFText_FindNext((FPDF_SCHHANDLE) searchPtr);
+    } catch (const std::exception &e) {
+        LOGE("olol %s", e.what());
+        jniThrowException(env, "java/lang/IllegalStateException", "olol Cannot find next");
+        return false;
+    }
 }
 
 JNI_FUNC(jlong, PdfiumCore, nativeFindTextPageStart)(JNI_ARGS, jlong textPtr, jlong keyStr,

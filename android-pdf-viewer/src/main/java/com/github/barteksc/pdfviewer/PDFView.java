@@ -1745,7 +1745,11 @@ public class PDFView extends RelativeLayout {
             jumpTo(searchRecords.valueAt(0).pageIdx, true);
         }
         invalidate();
-        Toast.makeText(getContext(), "Found items count:" + searchRecords.size(), Toast.LENGTH_SHORT).show();
+        int resultCount = 0;
+        for (int i = 0; i < searchRecords.size(); i++) {
+            resultCount += searchRecords.valueAt(i).getSearchRecordItems().size();
+        }
+        Toast.makeText(getContext(), "Found items count:" + resultCount, Toast.LENGTH_SHORT).show();
     }
 
 

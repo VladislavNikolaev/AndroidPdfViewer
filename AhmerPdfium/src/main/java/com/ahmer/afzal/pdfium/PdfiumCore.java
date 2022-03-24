@@ -24,7 +24,11 @@ public class PdfiumCore {
     private static int mCurrentDpi = 0;
 
     static {
-        System.loadLibrary("pdfsdk");
+        System.loadLibrary("c++_chrome.cr");
+        System.loadLibrary("icuuc.cr");
+        System.loadLibrary("chrome_zlib.cr");
+        System.loadLibrary("absl.cr");
+        System.loadLibrary("pdfium.cr");
         System.loadLibrary("pdfsdk_jni");
     }
 

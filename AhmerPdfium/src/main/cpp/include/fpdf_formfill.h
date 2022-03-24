@@ -17,7 +17,7 @@
 #define FORMTYPE_ACRO_FORM 1       // Forms are specified using AcroForm spec
 #define FORMTYPE_XFA_FULL 2        // Forms are specified using entire XFA spec
 #define FORMTYPE_XFA_FOREGROUND 3  // Forms are specified using the XFAF subset
-// of XFA spec
+                                   // of XFA spec
 #define FORMTYPE_COUNT 4           // The number of form types
 
 #define JSPLATFORM_ALERT_BUTTON_OK 0           // OK button

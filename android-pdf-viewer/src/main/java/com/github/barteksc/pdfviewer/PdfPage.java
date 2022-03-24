@@ -1,6 +1,7 @@
 package com.github.barteksc.pdfviewer;
 
 import android.graphics.RectF;
+import android.util.Log;
 
 import com.ahmer.afzal.pdfium.PdfDocument;
 import com.ahmer.afzal.pdfium.PdfiumCore;
@@ -97,15 +98,29 @@ public class PdfPage {
         prepareText();
         if (record.data == null) {
             long keyStr = record.getKeyStr();
+            Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " keyStr=" + keyStr);
+
             if (keyStr != 0) {
-                long searchHandle = pdfiumCore.nativeFindTextPageStart(tid, keyStr, 0, record.findStart);
+                long searchHandle = pdfiumCore.nativeFindTextPageStart(tid, keyStr, 2, record.findStart);
+                Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeFindTextPageStart Thread.currentThread().getName()=" + Thread.currentThread().getName());
+
                 if (searchHandle != 0) {
                     while (pdfiumCore.nativeFindTextPageNext(searchHandle)) {
+                        Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeFindTextPageNext");
+
                         int startIndex = pdfiumCore.nativeGetFindIdx(searchHandle);
+                        Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeGetFindIdx");
+
                         int endIndex = pdfiumCore.nativeGetFindLength(searchHandle);
+                        Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeGetFindLength");
+
+                        Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " getRectsForRecordItem start");
                         getRectsForRecordItem(record.getSearchRecordItems(), startIndex, endIndex, record.pageIdx);
+                        Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " getRectsForRecordItem end");
                     }
+                    Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeFindTextPageEnd start");
                     pdfiumCore.nativeFindTextPageEnd(searchHandle);
+                    Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeFindTextPageEnd end");
                 }
             }
         }
@@ -114,6 +129,8 @@ public class PdfPage {
     private void getRectsForRecordItem(ArrayList<SearchRecordItem> data, int start, int end, int pageIdx) {
         if (start >= 0 && end > 0) {
             int rectCount = pdfiumCore.nativeCountRects(tid, start, end);
+            Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeCountRects = " + rectCount);
+
             if (rectCount > 0) {
                 RectF[] rects = new RectF[rectCount];
                 for (int i = 0; i < rectCount; i++) {
@@ -121,6 +138,7 @@ public class PdfPage {
                     pdfiumCore.nativeGetRect(
                             pid.get(), 0, 0, (int) currentSize.getWidth(),
                             (int) currentSize.getHeight(), tid, rect, i);
+                    Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeGetRect = " + rect);
                     rects[i] = rect;
                 }
                 rects = Arrays.asList(rects).toArray(new RectF[0]);
