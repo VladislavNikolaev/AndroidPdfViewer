@@ -8,8 +8,7 @@ import com.ahmer.afzal.pdfium.PdfiumCore;
 import com.ahmer.afzal.pdfium.util.Size;
 import com.ahmer.afzal.pdfium.util.SizeF;
 
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class PdfPage {
@@ -94,39 +93,29 @@ public class PdfPage {
         return originalSize;
     }
 
-    public void getAllMatchOnPage(SearchRecord record) {
+    public SearchRecord getAllMatchOnPage(String key) {
+        SearchRecord record = new SearchRecord(key, pageIdx);
         prepareText();
+        String pageTextLowercase = allText.toLowerCase(Locale.ROOT);
         if (record.data == null) {
-            long keyStr = record.getKeyStr();
-            Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " keyStr=" + keyStr);
-
-            if (keyStr != 0) {
-                long searchHandle = pdfiumCore.nativeFindTextPageStart(tid, keyStr, 2, record.findStart);
-                Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeFindTextPageStart Thread.currentThread().getName()=" + Thread.currentThread().getName());
-
-                if (searchHandle != 0) {
-                    while (pdfiumCore.nativeFindTextPageNext(searchHandle)) {
-                        Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeFindTextPageNext");
-
-                        int startIndex = pdfiumCore.nativeGetFindIdx(searchHandle);
-                        Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeGetFindIdx");
-
-                        int endIndex = pdfiumCore.nativeGetFindLength(searchHandle);
-                        Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeGetFindLength");
-
-                        Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " getRectsForRecordItem start");
-                        getRectsForRecordItem(record.getSearchRecordItems(), startIndex, endIndex, record.pageIdx);
-                        Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " getRectsForRecordItem end");
+            for (String searchQuery : record.getSearchQueries()) {
+                int startIndex = pageTextLowercase.indexOf(searchQuery);
+                while (startIndex >= 0) {
+                    int endIndex = searchQuery.length();
+                    RectF[] rectsForRecordItem = getRectsForRecordItem(startIndex, endIndex);
+                    if (rectsForRecordItem != null) {
+                        record.addSearchRecordItem(new SearchRecordItem(startIndex, endIndex, rectsForRecordItem, pageIdx));
                     }
-                    Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeFindTextPageEnd start");
-                    pdfiumCore.nativeFindTextPageEnd(searchHandle);
-                    Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeFindTextPageEnd end");
+                    int nextSearchStartIndex = startIndex + 1;
+                    startIndex = pageTextLowercase.indexOf(searchQuery, nextSearchStartIndex);
                 }
             }
+            record.sortSearchRecordItems();
         }
+        return record;
     }
 
-    private void getRectsForRecordItem(ArrayList<SearchRecordItem> data, int start, int end, int pageIdx) {
+    private RectF[] getRectsForRecordItem(int start, int end) {
         if (start >= 0 && end > 0) {
             int rectCount = pdfiumCore.nativeCountRects(tid, start, end);
             Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeCountRects = " + rectCount);
@@ -141,9 +130,9 @@ public class PdfPage {
                     Log.d("olol", "getAllMatchOnPage getKeyStr page=" + getPageIdx() + " nativeGetRect = " + rect);
                     rects[i] = rect;
                 }
-                rects = Arrays.asList(rects).toArray(new RectF[0]);
-                data.add(new SearchRecordItem(start, end, rects, pageIdx));
+                return rects;
             }
         }
+        return null;
     }
 }

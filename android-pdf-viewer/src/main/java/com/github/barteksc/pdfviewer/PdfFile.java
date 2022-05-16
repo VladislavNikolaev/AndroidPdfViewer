@@ -328,31 +328,27 @@ class PdfFile {
         }
     }
 
-    public SearchRecord findPageCached(String key, int pageIdx, int flag) {
-        PdfPage page = pages[pageIdx];
-        synchronized (page.getPid()) {
-            boolean shouldClose = page.loadText();
-            int foundIdx = pdfiumCore.nativeFindTextPage(page.getTid(), key, flag);
-            SearchRecord searchRecord = foundIdx == -1 ? null : new SearchRecord(key, pageIdx, foundIdx);
-            if (shouldClose) {
-                page.close();
-            }
-            return searchRecord;
-        }
-    }
+//    public SearchRecord findPageCached(String key, int pageIdx, int flag) {
+//        PdfPage page = pages[pageIdx];
+//        synchronized (page.getPid()) {
+//            boolean shouldClose = page.loadText();
+//            int foundIdx = pdfiumCore.nativeFindTextPage(page.getTid(), key, flag);
+//            SearchRecord searchRecord = foundIdx == -1 ? null : new SearchRecord(key, pageIdx, foundIdx);
+//            if (shouldClose) {
+//                page.close();
+//            }
+//            return searchRecord;
+//        }
+//    }
 
     public SparseArray<SearchRecord> findAllMatches(String key) {
-        key = key + "\0";
         SparseArray<SearchRecord> searchResults = new SparseArray<>();
         for (PdfPage page : pages) {
-            SearchRecord searchRecord = findPageCached(key, page.getPageIdx(), 0);
-            if (searchRecord != null) {
-                Log.d("olol", "getAllMatchOnPage start page=" + page.getPageIdx());
-                page.getAllMatchOnPage(searchRecord);
-                Log.d("olol", "getAllMatchOnPage end page=" + page.getPageIdx());
+            Log.d("olol", "getAllMatchOnPage start page=" + page.getPageIdx());
+            SearchRecord searchRecord = page.getAllMatchOnPage(key);
+            Log.d("olol", "getAllMatchOnPage end page=" + page.getPageIdx());
 
-                searchResults.put(page.getPageIdx(), searchRecord);
-            }
+            searchResults.put(page.getPageIdx(), searchRecord);
         }
 
         return searchResults;
